@@ -50,6 +50,20 @@ class MLP(nn.Module):
                 x = self.activations(x)
         return x
 
+class LayerNormMLP(nn.Module):
+    hidden_dims: Sequence[int]
+    activations: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu
+    activate_final: int = False
+    kernel_init: Callable[[PRNGKey, Shape, Dtype], Array] = default_init()
+
+    @nn.compact
+    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
+        for i, size in enumerate(self.hidden_dims):
+            x = nn.Dense(size, kernel_init=self.kernel_init)(x)
+            if i + 1 < len(self.hidden_dims) or self.activate_final:                
+                x = self.activations(x)
+                x = nn.LayerNorm()(x)
+        return x
 
 ###############################
 #
@@ -109,6 +123,26 @@ class ValueCritic(nn.Module):
     def __call__(self, observations: jnp.ndarray) -> jnp.ndarray:
         critic = MLP((*self.hidden_dims, 1))(observations)
         return jnp.squeeze(critic, -1)
+
+class EnsembleCritic(nn.Module):
+    hidden_dims: tuple = (256, 256)
+    use_layer_norm: bool = False
+    activate_final: bool = False
+    
+    @nn.compact
+    def __call__(self, observations, actions):
+        x = jnp.concatenate([observations, actions], -1)
+        if self.use_layer_norm:
+            module = LayerNormMLP
+        else:
+            module = MLP
+        module = ensemblize(module, 2)
+        q1, q2 = module(
+            (*self.hidden_dims, 1), 
+            activate_final=self.activate_final, 
+            activations=nn.gelu
+        )(x).squeeze(-1)
+        return q1, q2
 
 
 class Policy(nn.Module):
