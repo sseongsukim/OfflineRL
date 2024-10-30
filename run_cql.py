@@ -12,11 +12,11 @@ from tqdm import tqdm
 import wandb
 import pickle
 import numpy as np
-
+from src.agent import cql as learner
 import flax
 
 FLAGS = flags.FLAGS
-flags.DEFINE_string("env_name", "halfcheetah-expert-v2", 'Environment name.')
+flags.DEFINE_string("env_name", "hopper-medium-v2", 'Environment name.')
 flags.DEFINE_string("save_dir", "log", 'Logging dir (if not None, save params).')
 flags.DEFINE_string("run_group", "DEBUG", "")
 flags.DEFINE_integer("num_episodes", 50, "")
