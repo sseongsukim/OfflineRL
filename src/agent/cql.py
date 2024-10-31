@@ -38,7 +38,7 @@ class CQLAgent(flax.struct.PyTreeNode):
         new_rng, curr_key, next_key, cql_key = jax.random.split(agent.rng, 4)
 
         def critic_loss_fn(critic_params):
-            # Compute target Q-values
+
             next_dist = agent.actor(batch['next_observations'])
             next_actions, next_log_probs = next_dist.sample_and_log_prob(seed=next_key)
 
@@ -46,38 +46,31 @@ class CQLAgent(flax.struct.PyTreeNode):
             next_q = jnp.minimum(next_q1, next_q2)
             target_q = batch['rewards'] + agent.config['discount'] * batch['masks'] * next_q
 
-            # Compute current Q-values
             q1, q2 = agent.critic(batch['observations'], batch['actions'], params=critic_params)
             td_loss = ((q1 - target_q) ** 2 + (q2 - target_q) ** 2).mean()
 
-            # CQL regularization
             alpha = agent.config.get('cql_alpha', 1.0)
 
-            # Sample actions from policy and uniform distribution
             policy_dist = agent.actor(batch['observations'])
             policy_actions, _ = policy_dist.sample_and_log_prob(seed=curr_key)
 
             random_actions = jax.random.uniform(
                 cql_key, shape=batch['actions'].shape, minval=-1.0, maxval=1.0
             )
-
-            # Compute Q-values for sampled actions
             q1_policy, q2_policy = agent.critic(batch['observations'], policy_actions, params=critic_params)
             q1_random, q2_random = agent.critic(batch['observations'], random_actions, params=critic_params)
 
-            # Compute log-sum-exp for policy and random actions
             ood_q1 = jnp.concatenate([q1_policy, q1_random], axis=0)
             ood_q2 = jnp.concatenate([q2_policy, q2_random], axis=0)
 
             logsumexp_q1 = jax.scipy.special.logsumexp(ood_q1)
             logsumexp_q2 = jax.scipy.special.logsumexp(ood_q2)
 
-            # Conservative loss
             cql_loss1 = (logsumexp_q1 - q1.mean()) * alpha
             cql_loss2 = (logsumexp_q2 - q2.mean()) * alpha
             cql_loss = cql_loss1 + cql_loss2
 
-            # Total critic loss
+
             critic_loss = td_loss + cql_loss
 
             return critic_loss, {

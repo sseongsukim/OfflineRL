@@ -12,11 +12,13 @@ from tqdm import tqdm
 import wandb
 import pickle
 import numpy as np
-from src.agent import cql as learner
+
+from src.agent import model_free_algos
 import flax
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string("env_name", "hopper-medium-v2", 'Environment name.')
+flags.DEFINE_string("algo_name", "iql", 'Algorithm name name.')
 flags.DEFINE_string("save_dir", "log", 'Logging dir (if not None, save params).')
 flags.DEFINE_string("run_group", "DEBUG", "")
 flags.DEFINE_integer("num_episodes", 50, "")
@@ -25,19 +27,29 @@ flags.DEFINE_integer("log_steps", 1000, "")
 flags.DEFINE_integer("eval_steps", 100000, "")
 flags.DEFINE_integer("save_steps", 250000, "")
 flags.DEFINE_integer("total_steps", 1000000, "")
-flags.DEFINE_integer("seed", 1, "")
-flags.DEFINE_integer("batch_size", 512, "")
 
-wandb_config = default_wandb_config()
-wandb_config.update({
-    "project": "offlineRL",
-    "group": "CQL",
-    "name": "CQL_{env_name}",
-})
-config_flags.DEFINE_config_dict('wandb', wandb_config, lock_config=False)
-config_flags.DEFINE_config_dict('algo', learner.get_default_config(), lock_config=False)
+seed = np.random.randint(low= 0, high= 10000000)
+flags.DEFINE_integer("seed", seed, "")
+flags.DEFINE_integer("batch_size", 512, "")
+flags.DEFINE_integer("hidden_size", 256, "")
+flags.DEFINE_integer("num_layers", 2, "")
+
+flags.DEFINE_bool("wandb_offline", False, "")
+
 
 def main(_):
+    wandb_config = default_wandb_config()
+    wandb_config.update({
+        "project": "offlineRL",
+        "group": f"{FLAGS.algo_name}",
+        "name": f"{FLAGS.algo_name}_{FLAGS.env_name}_{FLAGS.seed}",
+        "offline": FLAGS.wandb_offline,
+    })
+    config_flags.DEFINE_config_dict('wandb', wandb_config, lock_config=False)
+    learner, algo_config = model_free_algos[FLAGS.algo_name]
+    config_flags.DEFINE_config_dict('algo', algo_config, lock_config=False)
+    FLAGS.algo["hidden_dims"] = (FLAGS.hidden_size,) * FLAGS.num_layers
+    
     env = d4rl_utils.make_env(FLAGS.env_name)
     env.render("rgb_array")
     
@@ -59,11 +71,12 @@ def main(_):
         dataset= dataset,
     )
     example_batch = dataset.sample(1)
-    agent = learner.create_learner(
+    agent = learner(
         seed= FLAGS.seed,
         observations= example_batch["observations"],
         actions= example_batch["actions"],
         max_steps= FLAGS.total_steps,
+        **FLAGS.algo
     )
     for step in tqdm(
         range(1, FLAGS.total_steps + 1),
@@ -83,6 +96,7 @@ def main(_):
             )
             for k, v in eval_info.items():
                 update_info[f"eval/{k}"] = v
+                print(f"{k}: {v}")
             for i in range(len(videos)):
                 update_info[f"video_{i}"] = wandb.Video(np.array(videos[i]), fps= 15, format= "mp4")
 

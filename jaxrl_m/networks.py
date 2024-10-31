@@ -124,7 +124,7 @@ class ValueCritic(nn.Module):
         critic = MLP((*self.hidden_dims, 1))(observations)
         return jnp.squeeze(critic, -1)
 
-class EnsembleCritic(nn.Module):
+class Critic(nn.Module):
     hidden_dims: tuple = (256, 256)
     use_layer_norm: bool = False
     activate_final: bool = False
@@ -136,7 +136,27 @@ class EnsembleCritic(nn.Module):
             module = LayerNormMLP
         else:
             module = MLP
-        module = ensemblize(module, 2)
+        q = module(
+            (*self.hidden_dims, 1), 
+            activate_final=self.activate_final, 
+            activations=nn.gelu
+        )(x).squeeze(-1)
+        return q
+
+class EnsembleCritic(nn.Module):
+    hidden_dims: tuple = (256, 256)
+    use_layer_norm: bool = False
+    activate_final: bool = False
+    ensemble_size: int = 2
+    
+    @nn.compact
+    def __call__(self, observations, actions):
+        x = jnp.concatenate([observations, actions], -1)
+        if self.use_layer_norm:
+            module = LayerNormMLP
+        else:
+            module = MLP
+        module = ensemblize(module, self.ensemble_size)
         q1, q2 = module(
             (*self.hidden_dims, 1), 
             activate_final=self.activate_final, 
@@ -144,6 +164,25 @@ class EnsembleCritic(nn.Module):
         )(x).squeeze(-1)
         return q1, q2
 
+class ImplicitPolicy(nn.Module):
+    hidden_dims: Sequence[int]
+    action_dim: int
+    final_fc_init_scale: float = 1e-2
+    
+    @nn.compact
+    def __call__(
+        self,
+        observations: jnp.ndarray,
+    ):
+        outputs = MLP(
+            self.hidden_dims,
+            activate_final=True,
+        )(observations)
+        means = nn.Dense(
+            self.action_dim, kernel_init=default_init(self.final_fc_init_scale)
+        )(outputs)
+        actions = jnp.tanh(means)
+        return actions
 
 class Policy(nn.Module):
     hidden_dims: Sequence[int]
