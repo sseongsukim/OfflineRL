@@ -49,3 +49,21 @@ def normalize_dataset(env_name, dataset):
     normalizing_factor = get_normalization(dataset)
     dataset = dataset.copy({'rewards': dataset['rewards'] / normalizing_factor})
     return dataset
+
+
+class StandardScaler(object):
+    
+    def __init__(self, mu= None, std= None):
+        self.mu = mu
+        self.std = std
+    
+    def fit(self, batch):
+        self.mu = np.mean(batch, axis=0, keepdims= True)
+        self.std = np.std(batch, axis=0, keepdims= True)
+        self.std[self.std < 1e-12] = 1.0
+    
+    def transform(self, batch):
+        return (batch - self.mu) / self.std
+    
+    def inverse_transform(self, batch):
+        return self.std * batch + self.mu

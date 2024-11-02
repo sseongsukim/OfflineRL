@@ -64,7 +64,6 @@ def main(_):
         with open(os.path.join(FLAGS.save_dir, 'config.pkl'), 'wb') as f:
             pickle.dump(get_flag_dict(), f)
 
-    env = d4rl_utils.make_env(FLAGS.env_name)
     dataset = d4rl_utils.get_dataset(env, FLAGS.env_name)
     dataset = d4rl_utils.normalize_dataset(
         env_name= FLAGS.env_name, 

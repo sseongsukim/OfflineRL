@@ -164,6 +164,7 @@ class EnsembleCritic(nn.Module):
         )(x).squeeze(-1)
         return q1, q2
 
+
 class ImplicitPolicy(nn.Module):
     hidden_dims: Sequence[int]
     action_dim: int
@@ -249,11 +250,37 @@ class DiscretePolicy(nn.Module):
 
         return distribution
 
-
 class TransformedWithMode(distrax.Transformed):
     def mode(self) -> jnp.ndarray:
         return self.bijector.forward(self.distribution.mode())
 
+
+class EnsembleDynamicsModel(nn.Module):
+    hidden_dims: Sequence[int]
+    obs_dim: int
+    action_dim: int
+    num_ensemble: int
+    with_reward: bool
+    
+    @nn.compact
+    def __call__(
+        self,
+        observations,
+        actions,
+    ):
+        obs_action = jnp.concatenate([observations, actions], -1)
+        if self.use_layer_norm:
+            module = LayerNormMLP
+        else:
+            module = MLP
+        module = ensemblize(module, self.ensemble_size)
+        q1, q2 = module(
+            (*self.hidden_dims, 1), 
+            activate_final=self.activate_final, 
+            activations=nn.gelu
+        )(x).squeeze(-1)
+    
+    
 
 ###############################
 #
