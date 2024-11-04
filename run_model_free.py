@@ -34,7 +34,7 @@ flags.DEFINE_integer("batch_size", 512, "")
 flags.DEFINE_integer("hidden_size", 256, "")
 flags.DEFINE_integer("num_layers", 2, "")
 
-flags.DEFINE_bool("wandb_offline", False, "")
+flags.DEFINE_bool("wandb_offline", True, "")
 
 
 def main(_):
