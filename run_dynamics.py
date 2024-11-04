@@ -12,11 +12,12 @@ from tqdm import tqdm
 import wandb
 import pickle
 import numpy as np
-
+import jax
+import jax.numpy as jnp
 import flax
 
 FLAGS = flags.FLAGS
-flags.DEFINE_string("env_name", "hopper-medium-v2", 'Environment name.')
+flags.DEFINE_string("env_name", "walker2d-medium-expert-v2", 'Environment name.')
 flags.DEFINE_string("save_dir", "log", 'Logging dir (if not None, save params).')
 flags.DEFINE_string("run_group", "DEBUG", "")
 flags.DEFINE_integer("num_episodes", 50, "")
@@ -31,10 +32,18 @@ flags.DEFINE_integer("seed", seed, "")
 flags.DEFINE_integer("batch_size", 512, "")
 flags.DEFINE_integer("hidden_size", 256, "")
 flags.DEFINE_integer("num_layers", 2, "")
+flags.DEFINE_integer("num_elites", 7, "")
+flags.DEFINE_float("holdout_ratio", 0.2, "")
 
 flags.DEFINE_bool("wandb_offline", True, "")
 
+def shuffle_rows(arr):
+    idxes = np.argsort(np.random.uniform(size=arr.shape), axis=-1)
+    return arr[np.arange(arr.shape[0])[:, None], idxes]
+
 def main(_):
+    np.random.seed(FLAGS.seed)
+    
     env = d4rl_utils.make_env(FLAGS.env_name)
     env.render("rgb_array")
 
@@ -42,6 +51,27 @@ def main(_):
     dataset = d4rl_utils.get_dataset(env, FLAGS.env_name)
     scaler = d4rl_utils.StandardScaler()
     
+    inputs = np.concatenate([dataset["observations"], dataset["actions"]], axis= -1)
+    targets = np.concatenate([
+        dataset["next_observations"] - dataset["observations"], 
+        dataset["rewards"].reshape(-1, 1)
+    ], axis= -1)
+    dataset_size = inputs.shape[0]
+    holdout_size = min(int(dataset_size * FLAGS.holdout_ratio), 1000)
+    train_size = dataset_size - holdout_size
+    train_split_indices = np.random.permutation(range(dataset_size))
+    train_inputs, train_targets = inputs[train_split_indices[:train_size]], targets[train_split_indices[:train_size]]
+    holdout_inputs, holdout_targets = inputs[train_split_indices[train_size:]], targets[train_split_indices[train_size:]]
+    data_indices = np.random.randint(
+        train_size, size= [FLAGS.num_elites, train_size],
+    )
+    
+    scaler.fit(train_inputs)
+    train_inputs = scaler.transform(train_inputs)
+    holdout_inputs = scaler.transform(holdout_inputs)
+    holdout_losses = [1e10 for _ in range(FLAGS.num_elites)]
+
+    print("debug")
 
 
 if __name__ == "__main__":

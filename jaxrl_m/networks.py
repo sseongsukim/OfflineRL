@@ -72,7 +72,6 @@ class LayerNormMLP(nn.Module):
 #
 ###############################
 
-
 class DiscreteCritic(nn.Module):
     hidden_dims: Sequence[int]
     n_actions: int
@@ -84,7 +83,6 @@ class DiscreteCritic(nn.Module):
             observations
         )
 
-
 class Critic(nn.Module):
     hidden_dims: Sequence[int]
     activations: Callable[[jnp.ndarray], jnp.ndarray] = nn.relu
@@ -94,7 +92,6 @@ class Critic(nn.Module):
         inputs = jnp.concatenate([observations, actions], -1)
         critic = MLP((*self.hidden_dims, 1), activations=self.activations)(inputs)
         return jnp.squeeze(critic, -1)
-
 
 def ensemblize(cls, num_qs, out_axes=0, **kwargs):
     """
@@ -114,7 +111,6 @@ def ensemblize(cls, num_qs, out_axes=0, **kwargs):
         axis_size=num_qs,
         **kwargs
     )
-
 
 class ValueCritic(nn.Module):
     hidden_dims: Sequence[int]
@@ -164,7 +160,6 @@ class EnsembleCritic(nn.Module):
         )(x).squeeze(-1)
         return q1, q2
 
-
 class ImplicitPolicy(nn.Module):
     hidden_dims: Sequence[int]
     action_dim: int
@@ -212,7 +207,6 @@ class Policy(nn.Module):
             )(outputs)
         else:
             log_stds = self.param("log_stds", nn.initializers.zeros, (self.action_dim,))
-
         log_stds = jnp.clip(log_stds, self.log_std_min, self.log_std_max)
 
         if plan:
@@ -226,7 +220,6 @@ class Policy(nn.Module):
                 distribution, distrax.Block(distrax.Tanh(), ndims=1)
             )
         return distribution
-
 
 class DiscretePolicy(nn.Module):
     hidden_dims: Sequence[int]
@@ -253,7 +246,6 @@ class DiscretePolicy(nn.Module):
 class TransformedWithMode(distrax.Transformed):
     def mode(self) -> jnp.ndarray:
         return self.bijector.forward(self.distribution.mode())
-
 
 class EnsembleDynamicsModel(nn.Module):
     hidden_dims: Sequence[int]
@@ -288,8 +280,6 @@ class EnsembleDynamicsModel(nn.Module):
 #   Meta Networks for Encoders
 #
 ###############################
-
-
 def get_latent(
     encoder: nn.Module, observations: Union[jnp.ndarray, Dict[str, jnp.ndarray]]
 ):
