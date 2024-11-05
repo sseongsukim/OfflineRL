@@ -247,33 +247,96 @@ class TransformedWithMode(distrax.Transformed):
     def mode(self) -> jnp.ndarray:
         return self.bijector.forward(self.distribution.mode())
 
-class EnsembleDynamicsModel(nn.Module):
-    hidden_dims: Sequence[int]
+
+def softplus(x):
+    return jnp.logaddexp(x, 0)
+
+
+def soft_clamp(x, _min, _max):
+    x = _max - softplus(_max - x)
+    x = _min + softplus(x - _min)
+    return x
+
+class EnsembleLinear(nn.Module):
+    input_dim: int
+    output_dim: int
+    num_ensemble: int
+    weight_decay: float
+
+    def setup(self):
+        self.weight = self.param(
+            "kernel",
+            nn.initializers.glorot_normal(),
+            (self.num_ensemble, self.input_dim, self.output_dim),
+        )
+        self.bias = self.param(
+            "bias",
+            nn.initializers.glorot_normal(),
+            (self.num_ensemble, 1, self.output_dim),
+        )
+
+    def __call__(self, x: jnp.ndarray):
+        x = jnp.einsum("nbi,nij->nbj", x, self.weight)
+        x = x + self.bias
+        return x
+    
+    def get_decay_loss(self):
+        decay_loss = self.weight_decay * (0.5*((self.weight**2).sum()))
+        return decay_loss
+
+class EnsembleDyanmics(nn.Module):
     obs_dim: int
     action_dim: int
+    hidden_dims: Sequence[int]
+    weight_decays: Sequence[int]
     num_ensemble: int
-    with_reward: bool
+    pred_reward: bool
     
-    @nn.compact
-    def __call__(
-        self,
-        observations,
-        actions,
-    ):
-        obs_action = jnp.concatenate([observations, actions], -1)
-        if self.use_layer_norm:
-            module = LayerNormMLP
-        else:
-            module = MLP
-        module = ensemblize(module, self.ensemble_size)
-        q1, q2 = module(
-            (*self.hidden_dims, 1), 
-            activate_final=self.activate_final, 
-            activations=nn.gelu
-        )(x).squeeze(-1)
+    def setup(self):
+        hidden_dims = [self.obs_dim + self.action_dim] + list(self.hidden_dims)
+        self.layers = [EnsembleLinear(
+            input_dim= input_dim,
+            output_dim= output_dim,
+            num_ensemble= self.num_ensemble,
+            weight_decay= weight_decay,
+        ) for input_dim, output_dim, weight_decay in zip(hidden_dims[:-1], hidden_dims[1:], self.weight_decays)]
+        output_dim = self.obs_dim + 1 if self.pred_reward else self.obs_dim
+        self.final_layers = EnsembleLinear(
+            input_dim= hidden_dims[-1],
+            output_dim= output_dim * 2,
+            num_ensemble= self.num_ensemble,
+            weight_decay= self.weight_decays[-1],
+        )
+        self.min_logvar = self.param(
+            "min_logvar", nn.initializers.constant(-10.0), (output_dim,)
+        )
+        self.max_logvar = self.param(
+            "max_logvar", nn.initializers.constant(0.5), (output_dim,)
+        )
+        self.output_dim = output_dim
     
+    def __call__(self, obs_action: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        x = obs_action
+        for layer in self.layers:
+            x = layer(x)
+            x = nn.swish(x)
+        x = self.final_layers(x)
+        mean, logvar = x[:, :, :self.output_dim], x[:, :, self.output_dim:]
+        logvar = soft_clamp(logvar, self.min_logvar, self.max_logvar)
+        return mean, logvar 
     
-
+    def get_max_logvar_sum(self):
+        return self.max_logvar.sum()
+    
+    def get_min_logvar_sum(self):
+        return self.min_logvar.sum()
+    
+    def get_total_decay_loss(self):
+        decay_loss = 0
+        for layer in self.layers:
+            decay_loss += layer.get_decay_loss()
+        decay_loss += self.final_layers.get_decay_loss()
+        return decay_loss
 ###############################
 #
 #
