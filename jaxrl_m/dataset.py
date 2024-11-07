@@ -2,6 +2,7 @@ import numpy as np
 from jaxrl_m.typing import Data, Array
 from flax.core.frozen_dict import FrozenDict
 from jax import tree_util
+import jax
 
 
 def get_size(data: Data) -> int:
@@ -124,4 +125,15 @@ class ReplayBuffer(Dataset):
 
         tree_util.tree_map(set_idx, self._dict, transition)
         self.pointer = (self.pointer + 1) % self.max_size
+        self.size = max(self.pointer, self.size)
+
+    def add_batch_transitions(self, transitions):
+        def set_indices(buffer, new_elements):
+            length = new_elements.shape[0]
+            if self.pointer + length > self.max_size:
+                length = self.max_size - self.pointer
+            buffer[self.pointer: self.pointer + length] = new_elements[:length]
+        length = transitions["actions"].shape[0]
+        jax.tree.map(set_indices, self._dict, transitions)
+        self.pointer = (self.pointer + length) % self.max_size
         self.size = max(self.pointer, self.size)

@@ -38,7 +38,7 @@ flags.DEFINE_integer("batch_size", 512, "")
 flags.DEFINE_integer("num_elites", 5, "")
 flags.DEFINE_integer("max_epochs_since_update", 5, "")
 flags.DEFINE_float("holdout_ratio", 0.2, "")
-flags.DEFINE_bool("wandb_offline", False, "")
+flags.DEFINE_bool("wandb_offline", True, "")
 
 @jax.jit
 def validate(agent, inputs, targets):
@@ -156,6 +156,8 @@ def main(_):
         agent= flax.serialization.to_state_dict(agent),
         config= FLAGS.algo.to_dict(),
         elites= indexes,
+        mu= scaler.mu,
+        std= scaler.std,
     )
     fname = os.path.join(FLAGS.save_dir, f"dynamics_params.pkl")
     with open(fname, "wb") as f:

@@ -88,7 +88,7 @@ def create_learner(
 def get_default_config():
 
     config = ml_collections.ConfigDict({
-        "lr": 3e-4,
+        "lr": 1e-3,
         "num_ensemble": 7,
         "hidden_dims": (200, 200, 200, 200),
         "weight_decays": (2.5e-5, 5e-5, 7.5e-5, 7.5e-5, 1e-4),
