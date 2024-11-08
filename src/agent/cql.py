@@ -198,8 +198,6 @@ def get_default_config():
         'critic_lr': 3e-4,
         'hidden_dims': (512, 512),
         'discount': 0.99,
-        'expectile': 0.7,
-        'temperature': 3.0,
         'critic_layer_norm': True,
         'tau': 0.005,
     })

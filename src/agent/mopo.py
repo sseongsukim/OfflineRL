@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 from jaxrl_m.common import TrainState, target_update, nonpytree_field
-from jaxrl_m.networks import Policy, Critic, ensemblize, EnsembleDyanmics
+from jaxrl_m.networks import Policy, EnsembleCritic, EnsembleDyanmics
 from src.agent.dynamics import get_default_config as dynamics_config
 
 
@@ -121,7 +121,7 @@ class MOPOAgent(flax.struct.PyTreeNode):
         std = jnp.sqrt(jnp.exp(logvar))
         
         rng, ensemble_key = jax.random.split(agent.rng, 2)
-        ensemble_samples = (mean + jax.random.normal(ensemble_key, shape= (mean.shape)) * std)
+        ensemble_samples = mean + jax.random.normal(ensemble_key, shape= (mean.shape)) * std
         _, batch_size, _ = ensemble_samples.shape
         model_idxs = np.random.choice(agent.config["elites"], size=batch_size)
         samples = ensemble_samples[model_idxs, np.arange(batch_size)]
@@ -131,7 +131,7 @@ class MOPOAgent(flax.struct.PyTreeNode):
         penalty = jnp.amax(jnp.linalg.norm(std, axis= -1), axis= 0)
         penalty = jnp.expand_dims(penalty, 1)
         reward = reward - agent.config["penalty_coef"] * penalty
-        return next_obs, reward
+        return next_obs, reward, penalty
         
 
 def create_learner(
@@ -148,7 +148,8 @@ def create_learner(
     tau: float = 0.005,
     target_entropy: float = None,
     backup_entropy: bool = True,
-    penalty_coef: float = 2.5,
+    penalty_coef: float = 0.5,
+    critic_layer_norm: bool = True,
     **kwargs
 ):
         print('Extra kwargs:', kwargs)
@@ -160,16 +161,18 @@ def create_learner(
         actor_def = Policy(
             hidden_dims, 
             action_dim=action_dim, 
-            log_std_min=-10.0, 
-            state_dependent_std=True, 
-            tanh_squash_distribution=True, 
-            final_fc_init_scale=1.0
+            log_std_min= -5.0, 
+            state_dependent_std= False, 
+            tanh_squash_distribution= True, 
         )
 
         actor_params = actor_def.init(actor_key, observations)['params']
         actor = TrainState.create(actor_def, actor_params, tx=optax.adam(learning_rate=actor_lr))
 
-        critic_def = ensemblize(Critic, num_qs=2)(hidden_dims)
+        critic_def = EnsembleCritic(
+            hidden_dims= hidden_dims,
+            use_layer_norm= critic_layer_norm,
+        )
         critic_params = critic_def.init(critic_key, observations, actions)['params']
         critic = TrainState.create(critic_def, critic_params, tx=optax.adam(learning_rate=critic_lr))
         target_critic = TrainState.create(critic_def, critic_params)
@@ -179,7 +182,6 @@ def create_learner(
         temp = TrainState.create(temp_def, temp_params, tx=optax.adam(learning_rate=temp_lr))
 
         dynamic_config = dynamics_config()
-        
         obs_dim = observations.shape[-1]
         dynamics_def = EnsembleDyanmics(
             obs_dim= obs_dim,
@@ -215,6 +217,7 @@ def create_learner(
             elites= elites,
             penalty_coef= penalty_coef,  
         ))
+
         return MOPOAgent(
             rng= rng, 
             dynamics= dynamics, 
@@ -235,7 +238,6 @@ def get_default_config():
         'hidden_dims': (256, 256),
         'discount': 0.99,
         'tau': 0.005,
-        'target_entropy': ml_collections.config_dict.placeholder(float),
-        'backup_entropy': True,
-        'penalty_coef': 2.5
+        'penalty_coef': 0.5,
+        'critic_layer_norm': True,
     })

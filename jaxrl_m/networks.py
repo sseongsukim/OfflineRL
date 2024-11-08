@@ -156,7 +156,7 @@ class EnsembleCritic(nn.Module):
         q1, q2 = module(
             (*self.hidden_dims, 1), 
             activate_final=self.activate_final, 
-            activations=nn.gelu
+            activations=nn.relu,
         )(x).squeeze(-1)
         return q1, q2
 
@@ -184,7 +184,7 @@ class Policy(nn.Module):
     hidden_dims: Sequence[int]
     action_dim: int
     log_std_min: Optional[float] = -20
-    log_std_max: Optional[float] = 2
+    log_std_max: Optional[float] = 2.0
     tanh_squash_distribution: bool = False
     state_dependent_std: bool = True
     final_fc_init_scale: float = 1e-2

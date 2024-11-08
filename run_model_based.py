@@ -31,20 +31,18 @@ flags.DEFINE_string("algo_name", "mopo", "")
 flags.DEFINE_string("run_group", "DEBUG", "")
 flags.DEFINE_integer("num_episodes", 50, "")
 flags.DEFINE_integer("num_videos", 2, "")
-flags.DEFINE_integer("epoch", 3000, "")
+flags.DEFINE_integer("epoch", 2000, "")
 flags.DEFINE_integer("step_per_epoch", 1000, "")
 flags.DEFINE_integer("eval_steps", 100, "")
 flags.DEFINE_integer("log_steps", 10, "")
 seed = np.random.randint(low= 0, high= 10000000)
 flags.DEFINE_integer("seed", seed, "")
-flags.DEFINE_integer("batch_size", 512, "")
-flags.DEFINE_integer("num_elites", 7, "")
+flags.DEFINE_integer("batch_size", 1024, "")
 flags.DEFINE_integer("rollout_freq", 1000, "")
 flags.DEFINE_integer("rollout_batch_size", 50000, "")
 flags.DEFINE_integer("rollout_length", 1, "")
-flags.DEFINE_float("holdout_ratio", 0.2, "")
-flags.DEFINE_float("penalty_coef", 2.5, "")
-flags.DEFINE_float("dataset_ratio", 0.05, "")
+flags.DEFINE_float("penalty_coef", 0.5, "")
+flags.DEFINE_float("dataset_ratio", 0.1, "")
 flags.DEFINE_bool("wandb_offline", False, "")
 
 def rollout(
@@ -56,11 +54,12 @@ def rollout(
 ):
     num_transitions = 0
     rewards_arr = np.array([])
+    penalty_arr = np.array([])
     rollout_transitions = defaultdict(list)
     observations = init_obs
     for _ in range(rollout_length):
         actions = policy_fn(observations)
-        next_observations, rewards = dynamics_fn(observations, actions)
+        next_observations, rewards, penalty = dynamics_fn(observations, actions)
         terminals = terminated_fn(observations, actions, next_observations)
         rollout_transitions["observations"].append(observations)
         rollout_transitions["next_observations"].append(next_observations)
@@ -72,7 +71,7 @@ def rollout(
         
         num_transitions += len(observations)
         rewards_arr = np.append(rewards_arr, rewards.flatten())
-        
+        penalty_arr = np.append(penalty_arr, penalty.flatten())
         nonterm_mask = (~terminals).flatten()
         if nonterm_mask.sum() == 0:
             break
@@ -82,12 +81,20 @@ def rollout(
     for k, v in rollout_transitions.items():
         transitions[k] = np.concatenate(v, axis=0)
     
-    info = {"num_transitions": num_transitions, "reward_mean": rewards_arr.mean()}
+    info = {
+        "num_transitions": num_transitions, 
+        "reward_mean": rewards_arr.mean(), 
+        "penalty_mean": penalty_arr.mean(),
+    }
     return transitions, info
             
 
 def main(_):
     np.random.seed(FLAGS.seed)
+    # Env
+    env = d4rl_utils.make_env(FLAGS.env_name)
+    env.render("rgb_array")
+    
     with open(
         "log/offlineRL/dynamics/dynamics_walker2d-medium-expert-v2_4183302_1730907381_20241107_003621/dynamics_params.pkl",
         "rb",
@@ -107,9 +114,6 @@ def main(_):
     start_time = int(datetime.now().timestamp())
     FLAGS.wandb["name"] += f"_{start_time}"
     setup_wandb({**FLAGS.algo.to_dict(), **save_dict["config"]}, **FLAGS.wandb)
-    # Env
-    env = d4rl_utils.make_env(FLAGS.env_name)
-    env.render("rgb_array")
     # Dataset
     dataset = d4rl_utils.get_dataset(env, FLAGS.env_name)
     scaler = d4rl_utils.StandardScaler()
@@ -124,7 +128,7 @@ def main(_):
         "dones_float": dataset["dones_float"][0],
         "masks": 1.0 - dataset["dones_float"][0],
     }
-    buffer = ReplayBuffer.create(example_transition, size= 500000)
+    buffer = ReplayBuffer.create(example_transition, size= 5000000)
     # Terminated function
     terminated_fn = get_termination_fn(task= FLAGS.env_name)
     
@@ -139,7 +143,7 @@ def main(_):
 
     for epoch in tqdm(range(1, FLAGS.epoch + 1), smoothing= 0.1, desc= "epoch"):
 
-        for step in range(FLAGS.step_per_epoch):
+        for step in tqdm(range(FLAGS.step_per_epoch)):
             # MBRL
             if step % FLAGS.rollout_freq == 0:
                 init_obs = dataset.sample(FLAGS.rollout_batch_size)["observations"]
@@ -171,7 +175,11 @@ def main(_):
             for k, v in eval_info.items():
                 update_info[f"eval/{k}"] = v
             for video_num in range(len(videos)):
-                update_info[f"video_{video_num}"] = wandb.Video(np.array(videos[video_num]), fps= 15, format= "mp4")
+                update_info[f"video_{video_num}"] = wandb.Video(
+                    np.array(videos[video_num]), 
+                    fps= 30, 
+                    format= "mp4"
+                )
 
         if epoch % FLAGS.log_steps == 0:
             wandb.log(update_info, step= epoch)
