@@ -1,0 +1,5 @@
+program: run_model_based.py
+algo_name: mobile
+
+dataset_ratio: [0.05, 0.1, 0.15]
+penalty_coef: [0.5, 1.0, 1.5]

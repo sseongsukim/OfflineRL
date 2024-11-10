@@ -10,7 +10,6 @@ from jaxrl_m.evaluation import supply_rng, evaluate, flatten, add_to
 from jaxrl_m.wandb import setup_wandb, default_wandb_config, get_flag_dict
 from jaxrl_m.dataset import ReplayBuffer
 from src import d4rl_utils
-from src.agent import model_based_algos
 from src.termination_fns import get_termination_fn
 
 import os
@@ -27,7 +26,7 @@ import pickle
 FLAGS = flags.FLAGS
 flags.DEFINE_string("env_name", "walker2d-medium-expert-v2", 'Environment name.')
 flags.DEFINE_string("save_dir", "log", 'Logging dir (if not None, save params).')
-flags.DEFINE_string("algo_name", "rambo", "")
+flags.DEFINE_string("algo_name", "mobile", "")
 flags.DEFINE_string("run_group", "DEBUG", "")
 flags.DEFINE_integer("num_episodes", 50, "")
 flags.DEFINE_integer("num_videos", 2, "")
@@ -44,7 +43,7 @@ flags.DEFINE_integer("rollout_length", 1, "")
 flags.DEFINE_integer("dynamics_update_freq", 0, "")
 flags.DEFINE_float("penalty_coef", 0.5, "")
 flags.DEFINE_float("adv_weights", 3e-4, "")
-flags.DEFINE_float("dataset_ratio", 0.5, "")
+flags.DEFINE_float("dataset_ratio", 0.1, "")
 
 wandb_config = default_wandb_config()
 wandb_config.update({
@@ -116,14 +115,17 @@ def main(_):
         "rb",
     ) as f:
         save_dict = pickle.load(f)
-
+        
+    from src.agent import model_based_algos
     learner, algo_config = model_based_algos[FLAGS.algo_name]
     config_flags.DEFINE_config_dict('algo', algo_config, lock_config=False)
     
     if "dynamics_update_freq" in FLAGS.algo.to_dict().keys():
         FLAGS.dynamics_update_freq = FLAGS.algo.dynamics_update_freq
         FLAGS.algo.adv_weights = FLAGS.adv_weights
-    
+    if "dataset_ratio" in FLAGS.algo.to_dict().keys():
+        FLAGS.algo.dataset_ratio = FLAGS.dataset_ratio
+
     start_time = int(datetime.now().timestamp())
     FLAGS.wandb["name"] += f"_{start_time}"
     setup_wandb({**FLAGS.algo.to_dict(), **save_dict["config"]}, **FLAGS.wandb)
@@ -174,6 +176,11 @@ def main(_):
             buffer_sample_size = FLAGS.batch_size - dataset_sample_size
             buffer_batch = buffer.sample(buffer_sample_size)
             batch = {k: np.concatenate([dataset_batch[k], buffer_batch[k]], axis= 0) for k in dataset_batch.keys()}
+            if FLAGS.algo_name == "mobile":
+                batch["obs_actions"] = scaler.transform(np.concatenate([
+                    batch["observations"],
+                    batch["actions"],
+                ], axis= -1))
             agent, update_info = agent.update(batch)
             for k, v in rollout_info.items():
                 update_info[f"rollout/{k}"] = v

@@ -1,5 +1,5 @@
 from src.agent import cql, iql, td3bc
-from src.agent import mopo, rambo
+from src.agent import mopo, rambo, mobile
 
 
 model_free_algos = {
@@ -11,4 +11,5 @@ model_free_algos = {
 model_based_algos = {
     "mopo": (mopo.create_learner, mopo.get_default_config()),
     "rambo": (rambo.create_learner, rambo.get_default_config()),
+    'mobile': (mobile.create_learner, mobile.get_default_config()),
 }
