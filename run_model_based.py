@@ -27,7 +27,7 @@ import pickle
 FLAGS = flags.FLAGS
 flags.DEFINE_string("env_name", "walker2d-medium-expert-v2", 'Environment name.')
 flags.DEFINE_string("save_dir", "log", 'Logging dir (if not None, save params).')
-flags.DEFINE_string("algo_name", "mopo", "")
+flags.DEFINE_string("algo_name", "rambo", "")
 flags.DEFINE_string("run_group", "DEBUG", "")
 flags.DEFINE_integer("num_episodes", 50, "")
 flags.DEFINE_integer("num_videos", 2, "")
@@ -41,9 +41,25 @@ flags.DEFINE_integer("batch_size", 1024, "")
 flags.DEFINE_integer("rollout_freq", 1000, "")
 flags.DEFINE_integer("rollout_batch_size", 50000, "")
 flags.DEFINE_integer("rollout_length", 1, "")
+flags.DEFINE_integer("dynamics_update_freq", 0, "")
 flags.DEFINE_float("penalty_coef", 0.5, "")
-flags.DEFINE_float("dataset_ratio", 0.1, "")
-flags.DEFINE_bool("wandb_offline", False, "")
+flags.DEFINE_float("adv_weights", 3e-4, "")
+flags.DEFINE_float("dataset_ratio", 0.5, "")
+
+wandb_config = default_wandb_config()
+wandb_config.update({
+    "project": "offlineRL",
+    "group": "{algo_name}",
+    "name": "{algo_name}_{env_name}_{seed}",
+})
+config_flags.DEFINE_config_dict('wandb', wandb_config, lock_config=False)
+
+@jax.jit
+def agent_actions(agent, observations):
+    rng, action_key = jax.random.split(agent.rng, 2)
+    actions = agent.actor(observations).sample(seed= action_key)
+    actions = jnp.clip(actions, -1.0, 1.0)
+    return actions
 
 def rollout(
     policy_fn,
@@ -100,16 +116,13 @@ def main(_):
         "rb",
     ) as f:
         save_dict = pickle.load(f)
-    wandb_config = default_wandb_config()
-    wandb_config.update({
-        "project": "offlineRL",
-        "group": f"{FLAGS.algo_name}",
-        "name": f"{FLAGS.algo_name}_{FLAGS.env_name}_{FLAGS.seed}",
-        "offline": FLAGS.wandb_offline,
-    })
-    config_flags.DEFINE_config_dict('wandb', wandb_config, lock_config=False)
+
     learner, algo_config = model_based_algos[FLAGS.algo_name]
     config_flags.DEFINE_config_dict('algo', algo_config, lock_config=False)
+    
+    if "dynamics_update_freq" in FLAGS.algo.to_dict().keys():
+        FLAGS.dynamics_update_freq = FLAGS.algo.dynamics_update_freq
+        FLAGS.algo.adv_weights = FLAGS.adv_weights
     
     start_time = int(datetime.now().timestamp())
     FLAGS.wandb["name"] += f"_{start_time}"
@@ -129,7 +142,6 @@ def main(_):
         "masks": 1.0 - dataset["dones_float"][0],
     }
     buffer = ReplayBuffer.create(example_transition, size= 5000000)
-    # Terminated function
     terminated_fn = get_termination_fn(task= FLAGS.env_name)
     
     agent = learner(
@@ -138,9 +150,10 @@ def main(_):
         observations= dataset["observations"][:FLAGS.batch_size],
         actions= dataset["actions"][:FLAGS.batch_size],
         elites= save_dict["elites"],
+        env_name= FLAGS.env_name,
         **FLAGS.algo,
     )
-
+    num_timesteps = 0
     for epoch in tqdm(range(1, FLAGS.epoch + 1), smoothing= 0.1, desc= "epoch"):
 
         for step in tqdm(range(FLAGS.step_per_epoch)):
@@ -164,7 +177,36 @@ def main(_):
             agent, update_info = agent.update(batch)
             for k, v in rollout_info.items():
                 update_info[f"rollout/{k}"] = v
-
+            
+            # Rambo
+            if FLAGS.dynamics_update_freq > 0 and (num_timesteps + 1) % FLAGS.dynamics_update_freq == 0:
+                finetune_step = 0
+                while finetune_step < FLAGS.algo.adv_train_steps:
+                    adv_observations = dataset.sample(FLAGS.algo.adv_batch_size)["observations"]
+                    for _ in range(FLAGS.rollout_length):
+                        adv_actions = agent_actions(agent, adv_observations)
+                        adv_batch = dataset. sample(FLAGS.algo.adv_batch_size)
+                        adv_batch["adv_observations"] = adv_observations.copy()
+                        adv_batch["adv_actions"] = adv_actions.copy()
+                        adv_batch["adv_obs_actions"] = scaler.transform(np.concatenate([
+                            adv_batch["adv_observations"],
+                            adv_batch["adv_actions"],
+                        ], axis= -1))
+                        adv_batch["inputs"] = scaler.transform(np.concatenate([
+                            adv_batch["observations"],
+                            adv_batch["actions"],
+                        ], axis= -1))
+                        adv_batch["targets"] = np.concatenate([
+                            adv_batch["next_observations"] - adv_batch["observations"],
+                            adv_batch["rewards"].reshape(-1, 1)
+                        ], axis= -1)
+                        agent, finetune_info = agent.finetune_dynamics(adv_batch)
+                        finetune_step += 1
+                        adv_observations = finetune_info["next_observations"]
+                        if finetune_step == 1000:
+                            break
+            num_timesteps += 1
+            
         if epoch % FLAGS.eval_steps == 0:
             eval_info, videos = evaluate(
                 policy_fn= partial(supply_rng(agent.sample_actions), temperature= 0.0),

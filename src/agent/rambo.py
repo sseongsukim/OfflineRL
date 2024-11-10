@@ -3,13 +3,16 @@ import functools
 import flax.serialization
 from jaxrl_m.typing import *
 from typing import List
+
 import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+import distrax
 from jaxrl_m.common import TrainState, target_update, nonpytree_field
 from jaxrl_m.networks import Policy, EnsembleCritic, EnsembleDyanmics
 from src.agent.dynamics import get_default_config as dynamics_config
+from src.jax_terminaton import get_termination_fn
 
 import flax
 import flax.linen as nn
@@ -25,7 +28,7 @@ class Temperature(nn.Module):
         )
         return jnp.exp(log_temp)
 
-class MOPOAgent(flax.struct.PyTreeNode):
+class RAMBOAgent(flax.struct.PyTreeNode):
     rng: PRNGKey
     dynamics: TrainState
     critic: TrainState
@@ -130,7 +133,78 @@ class MOPOAgent(flax.struct.PyTreeNode):
         penalty = jnp.expand_dims(penalty, 1)
         reward = reward - agent.config["penalty_coef"] * penalty
         return next_obs, reward, penalty
-        
+    
+    @jax.jit
+    def finetune_dynamics(agent, batch: Batch):
+        new_rng, action_key, actor_key = jax.random.split(agent.rng, 3)
+        def finetune_dynamics_loss(dynamics_params):
+            inputs = batch["adv_obs_actions"][None, :].repeat(agent.config["num_ensemble"], 0)
+            diff_mean, logvar = agent.dynamics(inputs, params= dynamics_params)
+            diff_obs, diff_reward = diff_mean[:, :, :-1], diff_mean[:, :, -1:]
+            diff_obs = diff_obs.at[..., :].add(batch["adv_observations"][None, :].repeat(agent.config["num_ensemble"], 0))
+            mean = jnp.concatenate(
+                [diff_obs, diff_reward], axis= -1,
+            )
+            std = jnp.sqrt(jnp.exp(logvar))
+            
+            dist = distrax.Normal(loc= mean, scale= std)
+            ensemble_sample = dist.sample(seed= action_key)
+            _, batch_size, _ = ensemble_sample.shape
+            
+            selected_indices = np.random.choice(agent.config["elites"], size= batch_size)
+            sample = ensemble_sample[selected_indices, np.arange(batch_size)]
+            next_observations, rewards = sample[..., :-1], sample[..., -1:]
+            terminals = agent.config["terminal_fn"](
+                batch["adv_observations"],
+                batch["adv_actions"],
+                next_observations,
+            )
+            # Log prob
+            log_prob = dist.log_prob(sample).sum(-1, keepdims= True)
+            log_prob = log_prob[selected_indices, np.arange(batch_size)]
+            
+            # Advantage
+            next_actions, _ = agent.actor(next_observations).sample_and_log_prob(seed= actor_key)
+            nq1, nq2 = agent.critic(next_observations, next_actions)
+            next_q = jnp.expand_dims(jnp.minimum(nq1, nq2), 1)
+            value = rewards + (1 - terminals.astype(float)) * agent.config["discount"] * next_q
+            
+            q1, q2 = agent.critic(batch["adv_observations"], batch["adv_actions"])
+            value_baseline = jnp.expand_dims(jnp.minimum(q1, q2), 1)
+            
+            advantage = value - value_baseline
+            advantage = (advantage - advantage.mean()) / advantage.std() + 1e-10
+            
+            adv_loss = (log_prob * advantage).mean()
+
+            sl_mean, sl_logvar = agent.dynamics(
+                batch["inputs"][None, :].repeat(agent.config["num_ensemble"], 0),
+                params= dynamics_params,
+            )
+            sl_inv_var = jnp.exp(-sl_logvar)
+            sl_mse_loss_inv = (jnp.pow(sl_mean - batch["targets"], 2) * sl_inv_var).mean(axis= (1, 2))
+            sl_var_loss = sl_logvar.mean(axis= (1, 2))
+            sl_loss = sl_mse_loss_inv.sum() + sl_var_loss.sum()
+            decay_loss = agent.dynamics(method= "get_total_decay_loss")
+            sl_loss = sl_loss + decay_loss
+            logvar_loss = agent.config["sl_weight"] * (agent.dynamics(method= "get_max_logvar_sum") - agent.dynamics(method= "get_min_logvar_sum"))
+            sl_loss = sl_loss + logvar_loss
+            
+            loss = agent.config["adv_weights"] * adv_loss + sl_loss
+            return loss, {
+                "next_observations": next_observations,
+                "loss": loss,
+                "sl_loss": sl_loss,
+                "decay_loss": decay_loss,
+                "adv_loss": adv_loss,
+            }
+            
+            
+        new_dynamics, dynamics_info = agent.dynamics.apply_loss_fn(
+            loss_fn= finetune_dynamics_loss,
+            has_aux= True,
+        )
+        return agent.replace(rng= new_rng, dynamics= new_dynamics), {**dynamics_info}
 
 def create_learner(
     dynamics_save_dict,
@@ -138,6 +212,7 @@ def create_learner(
     observations: jnp.ndarray,
     actions: jnp.ndarray,
     elites: List,
+    env_name: str,
     actor_lr: float = 3e-4,
     critic_lr: float = 3e-4,
     temp_lr: float = 3e-4,
@@ -148,6 +223,8 @@ def create_learner(
     backup_entropy: bool = True,
     penalty_coef: float = 0.5,
     critic_layer_norm: bool = True,
+    sl_weight: float = 0.001,
+    adv_weights: float = 3e-4,
     **kwargs
 ):
         print('Extra kwargs:', kwargs)
@@ -213,10 +290,13 @@ def create_learner(
             backup_entropy=backup_entropy,    
             num_ensemble= dynamic_config["num_ensemble"],
             elites= elites,
-            penalty_coef= penalty_coef,  
+            penalty_coef= penalty_coef,
+            sl_weight= sl_weight,
+            terminal_fn= get_termination_fn(task= env_name),
+            adv_weights= adv_weights,
         ))
 
-        return MOPOAgent(
+        return RAMBOAgent(
             rng= rng, 
             dynamics= dynamics, 
             critic= critic, 
@@ -238,4 +318,9 @@ def get_default_config():
         'tau': 0.005,
         'penalty_coef': 0.5,
         'critic_layer_norm': True,
+        'sl_weight': 0.001,
+        'dynamics_update_freq': 1000,
+        'adv_batch_size': 512,
+        'adv_weights': 3e-4,
+        'adv_train_steps': 1000,
     })
