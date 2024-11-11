@@ -1,4 +1,0 @@
-wandb_version: 1
-
-penalty_coef:
-  value: 0.5

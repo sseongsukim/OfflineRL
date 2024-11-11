@@ -6,6 +6,7 @@ wandb/
 *.ipynb
 # C extensions
 *.so
+.idea
 log/
 *.mp4
 *.pkl
