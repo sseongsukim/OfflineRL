@@ -43,7 +43,7 @@ flags.DEFINE_integer("rollout_length", 1, "")
 flags.DEFINE_integer("dynamics_update_freq", 0, "")
 flags.DEFINE_float("penalty_coef", 0.5, "")
 flags.DEFINE_float("adv_weights", 3e-4, "")
-flags.DEFINE_float("dataset_ratio", 0.1, "")
+flags.DEFINE_float("dataset_ratio", 0.15, "")
 
 wandb_config = default_wandb_config()
 wandb_config.update({
@@ -119,7 +119,7 @@ def main(_):
     from src.agent import model_based_algos
     learner, algo_config = model_based_algos[FLAGS.algo_name]
     config_flags.DEFINE_config_dict('algo', algo_config, lock_config=False)
-    
+    FLAGS.algo.penalty_coef = FLAGS.penalty_coef
     if "dynamics_update_freq" in FLAGS.algo.to_dict().keys():
         FLAGS.dynamics_update_freq = FLAGS.algo.dynamics_update_freq
         FLAGS.algo.adv_weights = FLAGS.adv_weights

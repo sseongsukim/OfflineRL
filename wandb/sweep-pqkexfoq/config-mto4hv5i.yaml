@@ -1,0 +1,6 @@
+wandb_version: 1
+
+dataset_ratio:
+  value: 0.1
+penalty_coef:
+  value: 0.5
