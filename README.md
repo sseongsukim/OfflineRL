@@ -1,5 +1,9 @@
 # OfflineRL
 ### Implement offline reinforcement learning algorithms (both Model-free and Model-based)
+<<<<<<< HEAD
+=======
+
+>>>>>>> 6f94b16d244c525c679b87351b443c2a49487f8e
 ### Model-free Algorithms
 - [CQL](https://arxiv.org/abs/2006.04779)
 - [IQL](https://arxiv.org/abs/2110.06169)
