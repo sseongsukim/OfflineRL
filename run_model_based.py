@@ -5,9 +5,8 @@ from collections import defaultdict
 from functools import partial
 from typing import List
 
-from jaxrl_m.common import TrainState
-from jaxrl_m.evaluation import supply_rng, evaluate, flatten, add_to
-from jaxrl_m.wandb import setup_wandb, default_wandb_config, get_flag_dict
+from jaxrl_m.evaluation import supply_rng, evaluate
+from jaxrl_m.wandb import setup_wandb, default_wandb_config
 from jaxrl_m.dataset import ReplayBuffer
 from src import d4rl_utils
 from src.termination_fns import get_termination_fn

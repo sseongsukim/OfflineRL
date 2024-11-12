@@ -30,12 +30,15 @@ flags.DEFINE_integer("total_steps", 1000000, "")
 
 seed = np.random.randint(low= 0, high= 10000000)
 flags.DEFINE_integer("seed", seed, "")
-flags.DEFINE_integer("batch_size", 512, "")
+flags.DEFINE_integer("batch_size", 1024, "")
 flags.DEFINE_integer("hidden_size", 256, "")
 flags.DEFINE_integer("num_layers", 2, "")
-
-flags.DEFINE_bool("wandb_offline", True, "")
-
+flags.DEFINE_bool("wandb_offline", False, "")
+flags.DEFINE_float("temperature", 3.0, "")
+flags.DEFINE_float("expectile", 0.8, "")
+flags.DEFINE_float("alpha", 2.5, "")
+flags.DEFINE_float("noise_clip", 0.5, "")
+flags.DEFINE_float("update_freq", 2, "")
 
 def main(_):
     wandb_config = default_wandb_config()
@@ -49,6 +52,13 @@ def main(_):
     learner, algo_config = model_free_algos[FLAGS.algo_name]
     config_flags.DEFINE_config_dict('algo', algo_config, lock_config=False)
     FLAGS.algo["hidden_dims"] = (FLAGS.hidden_size,) * FLAGS.num_layers
+    if "iql" == FLAGS.algo_name:
+        FLAGS.algo["temperature"] = FLAGS.temperature
+        FLAGS.algo["expectile"] = FLAGS.expectile
+    elif "td3bc" == FLAGS.algo_name:
+        FLAGS.algo["alpha"] = FLAGS.alpha
+        FLAGS.algo["noise_clip"] = FLAGS.noise_clip
+        FLAGS.algo["update_freq"] = FLAGS.update_freq
     
     env = d4rl_utils.make_env(FLAGS.env_name)
     env.render("rgb_array")

@@ -1,9 +1,12 @@
-program: run_model_based.py
+program: run_model_free.py
 method: grid
-algo_name: mobile
+env_name: hopper-medium-v2
+algo_name: iql
 metric:
   goal: maximize
   name: eval/episode.normalized_return
 parameters:
-  penalty_coef:
-    values: [0.5, 1.0, 1.5]
+  expectile:
+    values: [0.7, 0.8, 0.9]
+  temperature:
+    values: [1.0, 2.0, 3.0]

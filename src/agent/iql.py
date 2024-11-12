@@ -189,12 +189,12 @@ def create_learner(
     return IQLAgent(rng, critic=critic, target_critic=target_critic, value=value, actor=actor, config=config)
 
 def get_default_config():
-
+    
     config = ml_collections.ConfigDict({
         'actor_lr': 3e-4,
         'value_lr': 3e-4,
         'critic_lr': 3e-4,
-        'hidden_dims': (512, 512),
+        'hidden_dims': (256, 256),
         'discount': 0.99,
         'expectile': 0.7,
         'temperature': 3.0,
