@@ -6,7 +6,9 @@ metric:
   goal: maximize
   name: eval/episode.normalized_return
 parameters:
+  seed:
+    values: [1, 2, 3, 4, 5]
   expectile:
-    values: [0.7, 0.8, 0.9]
+    values: [0.7, 0.8]
   temperature:
     values: [1.0, 2.0, 3.0]

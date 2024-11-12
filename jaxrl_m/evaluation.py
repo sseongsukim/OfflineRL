@@ -7,6 +7,7 @@ from collections import defaultdict
 import time
 import jax.numpy as jnp
 
+
 def supply_rng(f, rng=jax.random.PRNGKey(0)):
     """
     Wrapper that supplies a jax random key to a function (using keyword `seed`).
@@ -47,18 +48,14 @@ def add_to(dict_of_lists, single_dict):
 
 def kitchen_render(kitchen_env, wh=64):
     from dm_control.mujoco import engine
+
     camera = engine.MovableCamera(kitchen_env.sim, wh, wh)
-    camera.set_pose(distance=1.8, lookat=[-0.3, .5, 2.], azimuth=90, elevation=-60)
+    camera.set_pose(distance=1.8, lookat=[-0.3, 0.5, 2.0], azimuth=90, elevation=-60)
     img = camera.render()
     return img
 
 
-def evaluate(
-    policy_fn, 
-    env: gym.Env, 
-    num_episodes: int, 
-    num_videos: int
-):
+def evaluate(policy_fn, env: gym.Env, num_episodes: int, num_videos: int):
     """
     Evaluates a policy in an environment by running it for some number of episodes,
     and returns average statistics for metrics in the environment's info dict.
@@ -86,7 +83,11 @@ def evaluate(
             observation, _, done, info = env.step(action)
             if i >= num_episodes:
                 size = 208
-                img = env.render("rgb_array", width= size, height= size).transpose(2, 0, 1).copy()
+                img = (
+                    env.render("rgb_array", width=size, height=size)
+                    .transpose(2, 0, 1)
+                    .copy()
+                )
                 frames.append(img)
             add_to(stats, flatten(info))
             step += 1

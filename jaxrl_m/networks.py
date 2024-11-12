@@ -50,6 +50,7 @@ class MLP(nn.Module):
                 x = self.activations(x)
         return x
 
+
 class LayerNormMLP(nn.Module):
     hidden_dims: Sequence[int]
     activations: Callable[[jnp.ndarray], jnp.ndarray] = nn.gelu
@@ -60,10 +61,11 @@ class LayerNormMLP(nn.Module):
     def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
         for i, size in enumerate(self.hidden_dims):
             x = nn.Dense(size, kernel_init=self.kernel_init)(x)
-            if i + 1 < len(self.hidden_dims) or self.activate_final:                
+            if i + 1 < len(self.hidden_dims) or self.activate_final:
                 x = self.activations(x)
                 x = nn.LayerNorm()(x)
         return x
+
 
 ###############################
 #
@@ -71,6 +73,7 @@ class LayerNormMLP(nn.Module):
 #  Common RL Networks
 #
 ###############################
+
 
 class DiscreteCritic(nn.Module):
     hidden_dims: Sequence[int]
@@ -83,6 +86,7 @@ class DiscreteCritic(nn.Module):
             observations
         )
 
+
 class Critic(nn.Module):
     hidden_dims: Sequence[int]
     activations: Callable[[jnp.ndarray], jnp.ndarray] = nn.relu
@@ -92,6 +96,7 @@ class Critic(nn.Module):
         inputs = jnp.concatenate([observations, actions], -1)
         critic = MLP((*self.hidden_dims, 1), activations=self.activations)(inputs)
         return jnp.squeeze(critic, -1)
+
 
 def ensemblize(cls, num_qs, out_axes=0, **kwargs):
     """
@@ -112,6 +117,7 @@ def ensemblize(cls, num_qs, out_axes=0, **kwargs):
         **kwargs
     )
 
+
 class ValueCritic(nn.Module):
     hidden_dims: Sequence[int]
 
@@ -120,11 +126,12 @@ class ValueCritic(nn.Module):
         critic = MLP((*self.hidden_dims, 1))(observations)
         return jnp.squeeze(critic, -1)
 
+
 class Critic(nn.Module):
     hidden_dims: tuple = (256, 256)
     use_layer_norm: bool = False
     activate_final: bool = False
-    
+
     @nn.compact
     def __call__(self, observations, actions):
         x = jnp.concatenate([observations, actions], -1)
@@ -133,18 +140,19 @@ class Critic(nn.Module):
         else:
             module = MLP
         q = module(
-            (*self.hidden_dims, 1), 
-            activate_final=self.activate_final, 
-            activations=nn.gelu
+            (*self.hidden_dims, 1),
+            activate_final=self.activate_final,
+            activations=nn.gelu,
         )(x).squeeze(-1)
         return q
+
 
 class EnsembleCritic(nn.Module):
     hidden_dims: tuple = (256, 256)
     use_layer_norm: bool = False
     activate_final: bool = False
     ensemble_size: int = 2
-    
+
     @nn.compact
     def __call__(self, observations, actions):
         x = jnp.concatenate([observations, actions], -1)
@@ -154,17 +162,18 @@ class EnsembleCritic(nn.Module):
             module = MLP
         module = ensemblize(module, self.ensemble_size)
         q1, q2 = module(
-            (*self.hidden_dims, 1), 
-            activate_final=self.activate_final, 
+            (*self.hidden_dims, 1),
+            activate_final=self.activate_final,
             activations=nn.relu,
         )(x).squeeze(-1)
         return q1, q2
+
 
 class ImplicitPolicy(nn.Module):
     hidden_dims: Sequence[int]
     action_dim: int
     final_fc_init_scale: float = 1e-2
-    
+
     @nn.compact
     def __call__(
         self,
@@ -180,6 +189,7 @@ class ImplicitPolicy(nn.Module):
         actions = jnp.tanh(means)
         return actions
 
+
 class Policy(nn.Module):
     hidden_dims: Sequence[int]
     action_dim: int
@@ -191,7 +201,10 @@ class Policy(nn.Module):
 
     @nn.compact
     def __call__(
-        self, observations: jnp.ndarray, temperature: float = 1.0, plan: bool = False,
+        self,
+        observations: jnp.ndarray,
+        temperature: float = 1.0,
+        plan: bool = False,
     ) -> distrax.Distribution:
         outputs = MLP(
             self.hidden_dims,
@@ -221,6 +234,7 @@ class Policy(nn.Module):
             )
         return distribution
 
+
 class DiscretePolicy(nn.Module):
     hidden_dims: Sequence[int]
     action_dim: int
@@ -228,7 +242,7 @@ class DiscretePolicy(nn.Module):
 
     @nn.compact
     def __call__(
-            self, observations: jnp.ndarray, temperature: float = 1.0
+        self, observations: jnp.ndarray, temperature: float = 1.0
     ) -> distrax.Distribution:
         outputs = MLP(
             self.hidden_dims,
@@ -239,9 +253,12 @@ class DiscretePolicy(nn.Module):
             self.action_dim, kernel_init=default_init(self.final_fc_init_scale)
         )(outputs)
 
-        distribution = distrax.Categorical(logits=logits / jnp.maximum(1e-6, temperature))
+        distribution = distrax.Categorical(
+            logits=logits / jnp.maximum(1e-6, temperature)
+        )
 
         return distribution
+
 
 class TransformedWithMode(distrax.Transformed):
     def mode(self) -> jnp.ndarray:
@@ -256,6 +273,7 @@ def soft_clamp(x, _min, _max):
     x = _max - softplus(_max - x)
     x = _min + softplus(x - _min)
     return x
+
 
 class EnsembleLinear(nn.Module):
     input_dim: int
@@ -279,10 +297,11 @@ class EnsembleLinear(nn.Module):
         x = jnp.einsum("nbi,nij->nbj", x, self.weight)
         x = x + self.bias
         return x
-    
+
     def get_decay_loss(self):
-        decay_loss = self.weight_decay * (0.5*((self.weight**2).sum()))
+        decay_loss = self.weight_decay * (0.5 * ((self.weight**2).sum()))
         return decay_loss
+
 
 class EnsembleDyanmics(nn.Module):
     obs_dim: int
@@ -291,21 +310,26 @@ class EnsembleDyanmics(nn.Module):
     weight_decays: Sequence[int]
     num_ensemble: int
     pred_reward: bool
-    
+
     def setup(self):
         hidden_dims = [self.obs_dim + self.action_dim] + list(self.hidden_dims)
-        self.layers = [EnsembleLinear(
-            input_dim= input_dim,
-            output_dim= output_dim,
-            num_ensemble= self.num_ensemble,
-            weight_decay= weight_decay,
-        ) for input_dim, output_dim, weight_decay in zip(hidden_dims[:-1], hidden_dims[1:], self.weight_decays)]
+        self.layers = [
+            EnsembleLinear(
+                input_dim=input_dim,
+                output_dim=output_dim,
+                num_ensemble=self.num_ensemble,
+                weight_decay=weight_decay,
+            )
+            for input_dim, output_dim, weight_decay in zip(
+                hidden_dims[:-1], hidden_dims[1:], self.weight_decays
+            )
+        ]
         output_dim = self.obs_dim + 1 if self.pred_reward else self.obs_dim
         self.final_layers = EnsembleLinear(
-            input_dim= hidden_dims[-1],
-            output_dim= output_dim * 2,
-            num_ensemble= self.num_ensemble,
-            weight_decay= self.weight_decays[-1],
+            input_dim=hidden_dims[-1],
+            output_dim=output_dim * 2,
+            num_ensemble=self.num_ensemble,
+            weight_decay=self.weight_decays[-1],
         )
         self.min_logvar = self.param(
             "min_logvar", nn.initializers.constant(-10.0), (output_dim,)
@@ -314,29 +338,31 @@ class EnsembleDyanmics(nn.Module):
             "max_logvar", nn.initializers.constant(0.5), (output_dim,)
         )
         self.output_dim = output_dim
-    
+
     def __call__(self, obs_action: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
         x = obs_action
         for layer in self.layers:
             x = layer(x)
             x = nn.swish(x)
         x = self.final_layers(x)
-        mean, logvar = x[:, :, :self.output_dim], x[:, :, self.output_dim:]
+        mean, logvar = x[:, :, : self.output_dim], x[:, :, self.output_dim :]
         logvar = soft_clamp(logvar, self.min_logvar, self.max_logvar)
-        return mean, logvar 
-    
+        return mean, logvar
+
     def get_max_logvar_sum(self):
         return self.max_logvar.sum()
-    
+
     def get_min_logvar_sum(self):
         return self.min_logvar.sum()
-    
+
     def get_total_decay_loss(self):
         decay_loss = 0
         for layer in self.layers:
             decay_loss += layer.get_decay_loss()
         decay_loss += self.final_layers.get_decay_loss()
         return decay_loss
+
+
 ###############################
 #
 #

@@ -132,7 +132,8 @@ class ReplayBuffer(Dataset):
             length = new_elements.shape[0]
             if self.pointer + length > self.max_size:
                 length = self.max_size - self.pointer
-            buffer[self.pointer: self.pointer + length] = new_elements[:length]
+            buffer[self.pointer : self.pointer + length] = new_elements[:length]
+
         length = transitions["actions"].shape[0]
         jax.tree.map(set_indices, self._dict, transitions)
         self.pointer = (self.pointer + length) % self.max_size

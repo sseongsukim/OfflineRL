@@ -10,7 +10,7 @@
 - [RAMBO-RL](https://arxiv.org/abs/2204.12581)
 - [MOBILE](https://proceedings.mlr.press/v202/sun23q.html)
 ---
-### Hardward
+### Software Environment
 1. OS: Ubuntu 20.04 (Available in 22.04 as well)
 2. CUDA: 12.6 / CUDNN: 8.9.6
 --- 
@@ -39,7 +39,7 @@
     python run_model_free.py --algo_name td3bc --env_name hopper-medium-v2 --batch_size 1024 --alpha 2.5 --noise_clip 0.5 --update_freq 2 --wandb_offline False
     ```
 --- 
-### Reference
+### References
 1. [Jaxrl_m](https://github.com/dibyaghosh/jaxrl_m)
 2. [OfflineRL-Kit](https://github.com/yihaosun1124/OfflineRL-Kit)
 3. [robot-learning](https://github.com/youngwoon/robot-learning)
