@@ -38,7 +38,7 @@ flags.DEFINE_integer("batch_size", 512, "")
 flags.DEFINE_integer("num_elites", 5, "")
 flags.DEFINE_integer("max_epochs_since_update", 5, "")
 flags.DEFINE_float("holdout_ratio", 0.2, "")
-flags.DEFINE_bool("wandb_offline", True, "")
+flags.DEFINE_integer("wandb_offline", 1, "")
 
 
 @jax.jit
@@ -58,8 +58,11 @@ def select_elites(metrics: List, num_elites: int) -> List[int]:
 
 def main(_):
     np.random.seed(FLAGS.seed)
+    env = d4rl_utils.make_env(FLAGS.env_name)
+    env.render("rgb_array")
     # Wandb
     wandb_config = default_wandb_config()
+    FLAGS.wandb_offline = bool(FLAGS.wandb_offline)
     wandb_config.update(
         {
             "project": "offlineRL",
@@ -86,9 +89,6 @@ def main(_):
         print(f"Saving config to {FLAGS.save_dir}/config.pkl")
         with open(os.path.join(FLAGS.save_dir, "config.pkl"), "wb") as f:
             pickle.dump(get_flag_dict(), f)
-
-    env = d4rl_utils.make_env(FLAGS.env_name)
-    env.render("rgb_array")
 
     # Dataset
     start_time = int(datetime.now().timestamp())

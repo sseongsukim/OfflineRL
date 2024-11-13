@@ -33,7 +33,7 @@ flags.DEFINE_integer("seed", seed, "")
 flags.DEFINE_integer("batch_size", 1024, "")
 flags.DEFINE_integer("hidden_size", 256, "")
 flags.DEFINE_integer("num_layers", 2, "")
-flags.DEFINE_bool("wandb_offline", False, "")
+flags.DEFINE_integer("wandb_offline", 0, "")
 flags.DEFINE_float("temperature", 3.0, "")
 flags.DEFINE_float("expectile", 0.8, "")
 flags.DEFINE_float("alpha", 2.5, "")
@@ -43,6 +43,7 @@ flags.DEFINE_float("update_freq", 2, "")
 
 def main(_):
     wandb_config = default_wandb_config()
+    FLAGS.wandb_offline = bool(FLAGS.wandb_offline)
     wandb_config.update(
         {
             "project": "offlineRL",

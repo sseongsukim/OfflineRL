@@ -26,6 +26,11 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string("env_name", "walker2d-medium-expert-v2", "Environment name.")
 flags.DEFINE_string("save_dir", "log", "Logging dir (if not None, save params).")
 flags.DEFINE_string("algo_name", "mobile", "")
+flags.DEFINE_string(
+    "dynamics_params_path",
+    "log/offlineRL/dynamics/dynamics_walker2d-medium-expert-v2_4183302_1730907381_20241107_003621/dynamics_params.pkl",
+    "",
+)
 flags.DEFINE_string("run_group", "DEBUG", "")
 flags.DEFINE_integer("num_episodes", 50, "")
 flags.DEFINE_integer("num_videos", 2, "")
@@ -43,6 +48,7 @@ flags.DEFINE_integer("dynamics_update_freq", 0, "")
 flags.DEFINE_float("penalty_coef", 0.5, "")
 flags.DEFINE_float("adv_weights", 3e-4, "")
 flags.DEFINE_float("dataset_ratio", 0.15, "")
+flags.DEFINE_integer("wandb_offline", 1, "")
 
 wandb_config = default_wandb_config()
 wandb_config.update(
@@ -109,12 +115,14 @@ def rollout(
 
 def main(_):
     np.random.seed(FLAGS.seed)
+    FLAGS.wandb_offline = bool(FLAGS.wandb_offline)
+    FLAGS.wandb.offline = FLAGS.wandb_offline
     # Env
     env = d4rl_utils.make_env(FLAGS.env_name)
     env.render("rgb_array")
 
     with open(
-        "log/offlineRL/dynamics/dynamics_walker2d-medium-expert-v2_4183302_1730907381_20241107_003621/dynamics_params.pkl",
+        FLAGS.dynamics_params_path,
         "rb",
     ) as f:
         save_dict = pickle.load(f)

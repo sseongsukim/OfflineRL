@@ -27,18 +27,37 @@
 ---
 ### Train Model-free algorithms
 1. IQL
-    ```terminal
-    python run_model_free.py --algo_name iql --env_name hopper-medium-v2 --batch_size 1024 --expectile 0.8 --temperature 3.0 --wandb_offline False
-    ```
+```terminal
+python run_model_free.py --algo_name iql --env_name hopper-medium-v2 --batch_size 1024 --expectile 0.8 --temperature 3.0 --wandb_offline 0
+```
 2. CQL
-    ```terminal
-    python run_model_free.py --algo_name cql --env_name hopper-medium-v2 --batch_size 1024 --wandb_offline False
-    ```
+```terminal
+python run_model_free.py --algo_name cql --env_name hopper-medium-v2 --batch_size 1024 --wandb_offline 0
+```
 3. TD3-BC
-    ```terminal
-    python run_model_free.py --algo_name td3bc --env_name hopper-medium-v2 --batch_size 1024 --alpha 2.5 --noise_clip 0.5 --update_freq 2 --wandb_offline False
-    ```
+```terminal
+python run_model_free.py --algo_name td3bc --env_name hopper-medium-v2 --batch_size 1024 --alpha 2.5 --noise_clip 0.5 --update_freq 2 --wandb_offline 0
+```
 --- 
+### Train Dynamics
+To train model-based algorithms, we first train a dynamics model that predicts the next state and reward based on the current observations and actions $\hat{T}(s',r|s,a)$.
+``` terminal
+python run_dynamics.py --env_name hopper-medium-v2 --batch_size 1024 --wandb_offline 0
+```
+---
+### Train model-based algorithms
+1. MOPO
+```terminal
+python run_model_based.py --env_name hopper-medium-v2 --algo_name mopo --batch_size 1024 --wandb_offline 0 --penalty_coef 0.5 --dataset_ratio 0.15 --dynamics_params_path {Your dynamics path}
+```
+2. RAMBO
+```terminal
+python rum_model_based.py --env_name hopper-medium-v2 --algo_name rambo --batch_size 1024 --wandb_offline 0 --penalty_coef 0.5 --dataset_ratio 0.5 --adv_weights 0.0003 --dynamics_update_freq 1000 --dynamics_params_path {Your dynamics path}
+```
+3. MOBILE
+```terminal
+python run_model_based.py --env_name hopper-medium-v2 --algo_name mobile --batch_size 1024 --wandb_offline 0 --penalty_coef 1.0 --dynamics_params_path {Your dynamics path}
+```
 ### References
 1. [Jaxrl_m](https://github.com/dibyaghosh/jaxrl_m)
 2. [OfflineRL-Kit](https://github.com/yihaosun1124/OfflineRL-Kit)
