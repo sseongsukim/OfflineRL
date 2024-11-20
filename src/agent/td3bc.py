@@ -63,7 +63,8 @@ class TD3BCAgent(flax.struct.PyTreeNode):
             q1, q2 = agent.critic(batch["observations"], actions)
             q = (q1 + q2) / 2
             bc_loss = ((actions - batch["actions"]) ** 2).mean()
-            actor_loss = -q.mean() * agent.config["alpha"] + bc_loss
+            lamd = agent.config["alpha"] / jnp.abs(q).mean()
+            actor_loss = -q.mean() * lamd + bc_loss
             return actor_loss, {
                 "actor_loss": actor_loss,
                 "bc_loss": bc_loss,
@@ -178,7 +179,7 @@ def get_default_config():
         {
             "actor_lr": 3e-4,
             "critic_lr": 3e-4,
-            "policy_ noise": 0.2,
+            "policy_noise": 0.2,
             "hidden_dims": (256, 256),
             "discount": 0.99,
             "tau": 0.005,

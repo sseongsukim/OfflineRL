@@ -6,7 +6,7 @@ from functools import partial
 from typing import List
 
 from jaxrl_m.evaluation import supply_rng, evaluate
-from jaxrl_m.wandb import setup_wandb, default_wandb_config
+from jaxrl_m.wandb import setup_wandb, default_wandb_config, get_flag_dict
 from jaxrl_m.dataset import ReplayBuffer
 from src import d4rl_utils
 from src.termination_fns import get_termination_fn
@@ -23,21 +23,22 @@ import wandb
 import pickle
 
 FLAGS = flags.FLAGS
-flags.DEFINE_string("env_name", "walker2d-medium-expert-v2", "Environment name.")
+flags.DEFINE_string("env_name", "walker2d-medium-v2", "Environment name.")
 flags.DEFINE_string("save_dir", "log", "Logging dir (if not None, save params).")
 flags.DEFINE_string("algo_name", "mobile", "")
 flags.DEFINE_string(
     "dynamics_params_path",
-    "log/offlineRL/dynamics/dynamics_walker2d-medium-expert-v2_4183302_1730907381_20241107_003621/dynamics_params.pkl",
+    "/home/moon/PycharmProjects/OfflineRL/log/offlineRL/dynamics/dynamics_walker2d-medium-v2_5161166_1731725320_20241116_114840/dynamics_params.pkl",
     "",
 )
 flags.DEFINE_string("run_group", "DEBUG", "")
 flags.DEFINE_integer("num_episodes", 50, "")
 flags.DEFINE_integer("num_videos", 2, "")
-flags.DEFINE_integer("epoch", 2000, "")
+flags.DEFINE_integer("epoch", 3000, "")
 flags.DEFINE_integer("step_per_epoch", 1000, "")
 flags.DEFINE_integer("eval_steps", 100, "")
 flags.DEFINE_integer("log_steps", 10, "")
+flags.DEFINE_integer("save_steps", 250, "")
 seed = np.random.randint(low=0, high=10000000)
 flags.DEFINE_integer("seed", seed, "")
 flags.DEFINE_integer("batch_size", 1024, "")
@@ -49,16 +50,6 @@ flags.DEFINE_float("penalty_coef", 0.5, "")
 flags.DEFINE_float("adv_weights", 3e-4, "")
 flags.DEFINE_float("dataset_ratio", 0.15, "")
 flags.DEFINE_integer("wandb_offline", 1, "")
-
-wandb_config = default_wandb_config()
-wandb_config.update(
-    {
-        "project": "offlineRL",
-        "group": "{algo_name}",
-        "name": "{algo_name}_{env_name}_{seed}",
-    }
-)
-config_flags.DEFINE_config_dict("wandb", wandb_config, lock_config=False)
 
 
 @jax.jit
@@ -115,6 +106,16 @@ def rollout(
 
 def main(_):
     np.random.seed(FLAGS.seed)
+    wandb_config = default_wandb_config()
+    wandb_config.update(
+        {
+            "project": "offlineRL",
+            "group": f"{FLAGS.algo_name}",
+            "name": f"{FLAGS.algo_name}_{FLAGS.env_name}_{FLAGS.seed}",
+        }
+    )
+    config_flags.DEFINE_config_dict("wandb", wandb_config, lock_config=False)
+
     FLAGS.wandb_offline = bool(FLAGS.wandb_offline)
     FLAGS.wandb.offline = FLAGS.wandb_offline
     # Env
@@ -141,6 +142,18 @@ def main(_):
     start_time = int(datetime.now().timestamp())
     FLAGS.wandb["name"] += f"_{start_time}"
     setup_wandb({**FLAGS.algo.to_dict(), **save_dict["config"]}, **FLAGS.wandb)
+    if FLAGS.save_dir is not None:
+        FLAGS.save_dir = os.path.join(
+            FLAGS.save_dir,
+            wandb.run.project,
+            wandb.config.exp_prefix,
+            wandb.config.experiment_id,
+        )
+        os.makedirs(FLAGS.save_dir, exist_ok=True)
+        print(f"Saving config to {FLAGS.save_dir}/config.pkl")
+        with open(os.path.join(FLAGS.save_dir, "config.pkl"), "wb") as f:
+            pickle.dump(get_flag_dict(), f)
+
     # Dataset
     dataset = d4rl_utils.get_dataset(env, FLAGS.env_name)
     scaler = d4rl_utils.StandardScaler()
@@ -270,6 +283,15 @@ def main(_):
                 update_info[f"video_{video_num}"] = wandb.Video(
                     np.array(videos[video_num]), fps=30, format="mp4"
                 )
+
+        if epoch % FLAGS.save_steps == 0 and FLAGS.save_dir is not None:
+            save_dict = dict(
+                agent=flax.serialization.to_state_dict(agent),
+                config=FLAGS.algo.to_dict(),
+            )
+            fname = os.path.join(FLAGS.save_dir, f"params_{epoch}.pkl")
+            with open(fname, "wb") as f:
+                pickle.dump(save_dict, f, protocol=4)
 
         if epoch % FLAGS.log_steps == 0:
             wandb.log(update_info, step=epoch)

@@ -18,8 +18,8 @@ import flax
 
 
 FLAGS = flags.FLAGS
-flags.DEFINE_string("env_name", "hopper-medium-v2", "Environment name.")
-flags.DEFINE_string("algo_name", "iql", "Algorithm name name.")
+flags.DEFINE_string("env_name", "walker2d-medium-expert-v2", "Environment name.")
+flags.DEFINE_string("algo_name", "td3bc", "Algorithm name name.")
 flags.DEFINE_string("save_dir", "log", "Logging dir (if not None, save params).")
 flags.DEFINE_string("run_group", "DEBUG", "")
 flags.DEFINE_integer("num_episodes", 50, "")
@@ -30,15 +30,15 @@ flags.DEFINE_integer("save_steps", 250000, "")
 flags.DEFINE_integer("total_steps", 1000000, "")
 seed = np.random.randint(low=0, high=10000000)
 flags.DEFINE_integer("seed", seed, "")
-flags.DEFINE_integer("batch_size", 1024, "")
+flags.DEFINE_integer("batch_size", 256, "")
 flags.DEFINE_integer("hidden_size", 256, "")
 flags.DEFINE_integer("num_layers", 2, "")
 flags.DEFINE_integer("wandb_offline", 0, "")
-flags.DEFINE_float("temperature", 3.0, "")
-flags.DEFINE_float("expectile", 0.8, "")
+flags.DEFINE_float("temperature", 2.0, "")
+flags.DEFINE_float("expectile", 0.7, "")
 flags.DEFINE_float("alpha", 2.5, "")
-flags.DEFINE_float("noise_clip", 0.5, "")
-flags.DEFINE_float("update_freq", 2, "")
+flags.DEFINE_float("noise_clip", 1.0, "")
+flags.DEFINE_integer("update_freq", 2, "")
 
 
 def main(_):

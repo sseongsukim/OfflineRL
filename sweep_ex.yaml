@@ -1,14 +1,10 @@
-program: run_model_free.py
+program: run_model_based.py
 method: grid
-env_name: hopper-medium-v2
-algo_name: iql
 metric:
   goal: maximize
   name: eval/episode.normalized_return
 parameters:
   seed:
     values: [1, 2, 3, 4, 5]
-  expectile:
-    values: [0.7, 0.8]
-  temperature:
-    values: [1.0, 2.0, 3.0]
+  env_name:
+    values: ["walker2d-medium-v2", "hopper-medium-v2", "halfcheetah-medium-v2"]

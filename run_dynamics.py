@@ -22,7 +22,7 @@ import wandb
 import pickle
 
 FLAGS = flags.FLAGS
-flags.DEFINE_string("env_name", "walker2d-medium-expert-v2", "Environment name.")
+flags.DEFINE_string("env_name", "walker2d-medium-v2", "Environment name.")
 flags.DEFINE_string("save_dir", "log", "Logging dir (if not None, save params).")
 flags.DEFINE_string("run_group", "DEBUG", "")
 flags.DEFINE_integer("num_episodes", 50, "")
@@ -34,11 +34,11 @@ flags.DEFINE_integer("total_steps", 1000000, "")
 
 seed = np.random.randint(low=0, high=10000000)
 flags.DEFINE_integer("seed", seed, "")
-flags.DEFINE_integer("batch_size", 512, "")
+flags.DEFINE_integer("batch_size", 1024, "")
 flags.DEFINE_integer("num_elites", 5, "")
-flags.DEFINE_integer("max_epochs_since_update", 5, "")
+flags.DEFINE_integer("max_epochs_since_update", 10, "")
 flags.DEFINE_float("holdout_ratio", 0.2, "")
-flags.DEFINE_integer("wandb_offline", 1, "")
+flags.DEFINE_integer("wandb_offline", 0, "")
 
 
 @jax.jit
