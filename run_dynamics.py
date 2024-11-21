@@ -36,7 +36,7 @@ seed = np.random.randint(low=0, high=10000000)
 flags.DEFINE_integer("seed", seed, "")
 flags.DEFINE_integer("batch_size", 1024, "")
 flags.DEFINE_integer("num_elites", 5, "")
-flags.DEFINE_integer("max_epochs_since_update", 10, "")
+flags.DEFINE_integer("max_epochs_since_update", 5, "")
 flags.DEFINE_float("holdout_ratio", 0.2, "")
 flags.DEFINE_integer("wandb_offline", 0, "")
 
@@ -178,6 +178,7 @@ def main(_):
             cnt = 0
         else:
             cnt += 1
+
         if cnt >= FLAGS.max_epochs_since_update:
             break
 

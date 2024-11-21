@@ -26,11 +26,6 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string("env_name", "walker2d-medium-v2", "Environment name.")
 flags.DEFINE_string("save_dir", "log", "Logging dir (if not None, save params).")
 flags.DEFINE_string("algo_name", "mobile", "")
-flags.DEFINE_string(
-    "dynamics_params_path",
-    "/home/moon/PycharmProjects/OfflineRL/log/offlineRL/dynamics/dynamics_walker2d-medium-v2_5161166_1731725320_20241116_114840/dynamics_params.pkl",
-    "",
-)
 flags.DEFINE_string("run_group", "DEBUG", "")
 flags.DEFINE_integer("num_episodes", 50, "")
 flags.DEFINE_integer("num_videos", 2, "")
@@ -38,7 +33,7 @@ flags.DEFINE_integer("epoch", 3000, "")
 flags.DEFINE_integer("step_per_epoch", 1000, "")
 flags.DEFINE_integer("eval_steps", 100, "")
 flags.DEFINE_integer("log_steps", 10, "")
-flags.DEFINE_integer("save_steps", 250, "")
+flags.DEFINE_integer("save_steps", 1000, "")
 seed = np.random.randint(low=0, high=10000000)
 flags.DEFINE_integer("seed", seed, "")
 flags.DEFINE_integer("batch_size", 1024, "")
@@ -49,7 +44,7 @@ flags.DEFINE_integer("dynamics_update_freq", 0, "")
 flags.DEFINE_float("penalty_coef", 0.5, "")
 flags.DEFINE_float("adv_weights", 3e-4, "")
 flags.DEFINE_float("dataset_ratio", 0.15, "")
-flags.DEFINE_integer("wandb_offline", 1, "")
+flags.DEFINE_integer("wandb_offline", 0, "")
 
 
 @jax.jit
@@ -122,10 +117,7 @@ def main(_):
     env = d4rl_utils.make_env(FLAGS.env_name)
     env.render("rgb_array")
 
-    with open(
-        FLAGS.dynamics_params_path,
-        "rb",
-    ) as f:
+    with open(f"dynamics/{FLAGS.env_name}.pkl", "rb") as f:
         save_dict = pickle.load(f)
 
     from src.agent import model_based_algos

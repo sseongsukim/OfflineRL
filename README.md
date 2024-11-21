@@ -61,7 +61,6 @@ python run_model_based.py --env_name hopper-medium-v2 --algo_name mobile --batch
 ### References
 1. [Jaxrl_m](https://github.com/dibyaghosh/jaxrl_m)
 2. [OfflineRL-Kit](https://github.com/yihaosun1124/OfflineRL-Kit)
-3. [robot-learning](https://github.com/youngwoon/robot-learning)
-4. [LEQ](https://github.com/kwanyoungpark/LEQ)
-5. [HIQL](https://github.com/seohongpark/HIQL)
+3. [LEQ](https://github.com/kwanyoungpark/LEQ)
+4. [HIQL](https://github.com/seohongpark/HIQL)
    

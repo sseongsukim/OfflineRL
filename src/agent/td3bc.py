@@ -139,7 +139,11 @@ def create_learner(
         hidden_dims=hidden_dims,
         action_dim=action_dim,
     )
-    actor_tx = optax.adam(learning_rate=actor_lr)
+    schedule_fn = optax.cosine_decay_schedule(-actor_lr, max_steps)
+    actor_tx = optax.chain(
+        optax.scale_by_adam(),
+        optax.scale_by_schedule(schedule_fn),
+    )
     actor_params = actor_def.init(actor_key, observations)["params"]
     actor = TrainState.create(actor_def, actor_params, tx=actor_tx)
 
