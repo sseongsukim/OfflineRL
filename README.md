@@ -45,6 +45,14 @@ To train model-based algorithms, we first train a dynamics model that predicts t
 python run_dynamics.py --env_name hopper-medium-v2 --batch_size 1024 --wandb_offline 0
 ```
 ---
+Please make directory named "dynamics" and move "dynamics_params.pkl" to dynamics folder. And change the name from "dynamics_params.pkl" to "{env_name}.pkl".
+```
+|--OfflineRL
+    |--dynamics
+        |--walker2d-medium-v2.pkl
+        |--hopper2d-medium-v2.pkl
+        |--...
+```
 ### Train model-based algorithms
 1. MOPO
 ```terminal
